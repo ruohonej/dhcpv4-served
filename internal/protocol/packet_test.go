@@ -70,19 +70,17 @@ func TestLibraryLongOptionRoundTrip(t *testing.T) {
 
 func TestMalformedOptions(t *testing.T) {
 	cases := map[string][]byte{
-		"no-end":                    {53, 1, 1},
-		"no-length":                 {53},
-		"truncated":                 {53, 4, 1, 255},
-		"repeated-message-type":     {53, 1, 1, 53, 1, 3, 255},
-		"empty-id":                  {53, 1, 1, 61, 0, 255},
-		"short-id":                  {53, 1, 1, 61, 1, 1, 255},
-		"invalid-overload":          {53, 1, 1, 52, 1, 4, 255},
-		"empty-then-valid-overload": {53, 1, 1, 52, 0, 52, 1, 1, 255},
-		"duplicate-overload":        {53, 1, 1, 52, 1, 1, 52, 1, 2, 255},
-		"missing-message-type":      {61, 2, 1, 2, 255},
-		"short-address":             {53, 1, 1, 50, 3, 1, 2, 3, 255},
-		"small-message-size":        {53, 1, 1, 57, 2, 0, 1, 255},
-		"after-end":                 {53, 1, 1, 255, 61, 2, 1, 2},
+		"no-end":                {53, 1, 1},
+		"no-length":             {53},
+		"truncated":             {53, 4, 1, 255},
+		"repeated-message-type": {53, 1, 1, 53, 1, 3, 255},
+		"empty-id":              {53, 1, 1, 61, 0, 255},
+		"short-id":              {53, 1, 1, 61, 1, 1, 255},
+		"invalid-overload":      {53, 1, 1, 52, 1, 4, 255},
+		"duplicate-overload":    {53, 1, 1, 52, 1, 1, 52, 1, 2, 255},
+		"missing-message-type":  {61, 2, 1, 2, 255},
+		"short-address":         {53, 1, 1, 50, 3, 1, 2, 3, 255},
+		"small-message-size":    {53, 1, 1, 57, 2, 0, 1, 255},
 	}
 	for name, opts := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -91,7 +89,7 @@ func TestMalformedOptions(t *testing.T) {
 			}
 		})
 	}
-	for name, field := range map[string][]byte{"nested": {52, 1, 1, 255}, "missing-end": {}, "truncated": {61, 255, 1}} {
+	for name, field := range map[string][]byte{"nested": {52, 1, 1, 255}, "nested-empty": {52, 0, 255}, "truncated": {61, 255, 1}} {
 		t.Run(name, func(t *testing.T) {
 			data := wire(t, []byte{53, 1, 1, 52, 1, 1, 255})
 			copy(data[108:236], field)
@@ -109,6 +107,33 @@ func TestMalformedOptions(t *testing.T) {
 	p.Options[61] = bytes.Repeat([]byte{1}, MaxClientIDSize+1)
 	if _, err := Parse(p.ToBytes()); err == nil {
 		t.Fatal("accepted oversized identity")
+	}
+}
+
+func TestLibraryOptionTolerance(t *testing.T) {
+	cases := []struct {
+		name    string
+		options []byte
+		file    []byte
+		wantID  []byte
+	}{
+		{"main-after-end", []byte{53, 1, 1, 255, 61, 2, 1, 2}, nil, nil},
+		{"empty-then-valid-overload", []byte{53, 1, 1, 52, 0, 52, 1, 1, 255}, nil, nil},
+		{"overload-missing-end", []byte{53, 1, 1, 52, 1, 1, 255}, []byte{61, 2, 1, 2}, []byte{1, 2}},
+		{"overload-after-end", []byte{53, 1, 1, 52, 1, 1, 255}, []byte{255, 61, 2, 1, 2}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := wire(t, tc.options)
+			copy(data[108:236], tc.file)
+			p, err := Parse(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(p.Options[61], tc.wantID) {
+				t.Fatalf("client identifier %x, want %x", p.Options[61], tc.wantID)
+			}
+		})
 	}
 }
 

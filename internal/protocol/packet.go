@@ -2,7 +2,6 @@
 package protocol
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -23,7 +22,7 @@ const (
 
 // Parse applies RFC 3396 concatenation in options, file, sname order. The pinned
 // library concatenates the main options but does not decode overloaded fields.
-// Keep the library for packet decoding and serialization; normalize options here.
+// The library decodes each field; this adapter validates and normalizes them.
 func Parse(data []byte) (*dhcpv4.DHCPv4, error) {
 	if len(data) < optionsOffset || len(data) > MaxPacketSize {
 		return nil, fmt.Errorf("%w: DHCP packet size outside 240..%d", ErrMalformedPacket, MaxPacketSize)
@@ -33,23 +32,20 @@ func Parse(data []byte) (*dhcpv4.DHCPv4, error) {
 		return nil, fmt.Errorf("parse DHCP packet: %w: %w", ErrMalformedPacket, err)
 	}
 
-	options := make(dhcpv4.Options)
-	if err := collect(options, data[optionsOffset:], true); err != nil {
-		return nil, fmt.Errorf("collect main options: %w", err)
-	}
+	options := packet.Options
 	if overload, ok := options[52]; ok {
 		if len(overload) != 1 || overload[0] < 1 || overload[0] > 3 {
 			return nil, fmt.Errorf("%w: invalid option overload", ErrMalformedPacket)
 		}
 		// Overload bit 1 selects file; bit 2 selects sname (RFC 2132 §9.3).
 		if overload[0]&1 != 0 {
-			if err := collect(options, data[108:236], false); err != nil {
+			if err := collectOverloaded(options, data[108:236]); err != nil {
 				return nil, fmt.Errorf("collect boot file options: %w", err)
 			}
 			packet.BootFileName = ""
 		}
 		if overload[0]&2 != 0 {
-			if err := collect(options, data[44:108], false); err != nil {
+			if err := collectOverloaded(options, data[44:108]); err != nil {
 				return nil, fmt.Errorf("collect server name options: %w", err)
 			}
 			packet.ServerHostName = ""
@@ -79,39 +75,19 @@ func Parse(data []byte) (*dhcpv4.DHCPv4, error) {
 	// Overloaded data has become ordinary options. Re-serialization must not
 	// advertise fields which the library serializer does not populate as options.
 	delete(options, 52)
-	packet.Options = options
 	return packet, nil
 }
 
-func collect(options dhcpv4.Options, data []byte, mainOptions bool) error {
-	for i := 0; i < len(data); {
-		code := data[i]
-		i++
-		if code == 0 {
-			continue
-		}
-		if code == 255 {
-			if len(bytes.Trim(data[i:], "\x00")) != 0 {
-				return fmt.Errorf("%w: non-padding bytes after END", ErrMalformedPacket)
-			}
-			return nil
-		}
-		if i == len(data) {
-			return fmt.Errorf("%w: missing option length", ErrMalformedPacket)
-		}
-
-		length := int(data[i])
-		i++
-		if length > len(data)-i {
-			return fmt.Errorf("%w: truncated option", ErrMalformedPacket)
-		}
-
-		_, seen := options[code]
-		if code == 52 && (!mainOptions || seen) {
-			return fmt.Errorf("%w: nested or repeated overload", ErrMalformedPacket)
-		}
-		options[code] = append(options[code], data[i:i+length]...)
-		i += length
+func collectOverloaded(options dhcpv4.Options, data []byte) error {
+	field := make(dhcpv4.Options)
+	if err := field.FromBytes(data); err != nil {
+		return fmt.Errorf("%w: parse overloaded options: %w", ErrMalformedPacket, err)
 	}
-	return fmt.Errorf("%w: missing END", ErrMalformedPacket)
+	if _, ok := field[52]; ok {
+		return fmt.Errorf("%w: nested overload", ErrMalformedPacket)
+	}
+	for code, value := range field {
+		options[code] = append(options[code], value...)
+	}
+	return nil
 }
