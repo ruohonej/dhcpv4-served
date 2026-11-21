@@ -47,6 +47,25 @@ class ReleaseSBOMTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "replacements"):
                 validator.validate(binary, sbom, "binary: go1.26.0\n\t=>\tother\tv1.0.0\n")
 
+    def test_reviewed_varlink_replacement_must_appear_in_sbom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = Path(tmp) / "binary"
+            binary.write_bytes(b"binary")
+            version = "v2.0.0-20260611234345-b30f18e21e83"
+            info = (f"binary: go1.26.0\n\tdep\tgithub.com/varlink/go/v2\t{version}\n"
+                    f"\t=>\tgithub.com/noxiouz/go/v2\t{version}\th1:abc\n")
+            sbom = {"bomFormat": "CycloneDX", "metadata": {"component": {
+                "version": "sha256:" + validator.digest(binary)}}, "components": [
+                    {"name": "stdlib", "version": "go1.26.0"},
+                    {"name": "github.com/noxiouz/go/v2", "version": version},
+                ]}
+            self.assertEqual(validator.validate(binary, sbom, info), "go1.26.0")
+            with self.assertRaisesRegex(ValueError, "replacements"):
+                validator.validate(binary, sbom, info.replace(f"{version}\th1:abc", "v2.1.0\th1:abc"))
+            sbom["components"].pop()
+            with self.assertRaisesRegex(ValueError, "missing embedded module"):
+                validator.validate(binary, sbom, info)
+
 
 if __name__ == "__main__":
     unittest.main()

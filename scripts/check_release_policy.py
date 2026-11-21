@@ -10,7 +10,7 @@ def check(env):
         raise ValueError("release repository is not authorized")
     if env.get("GITHUB_EVENT_NAME") != "push":
         raise ValueError("release requires a push event")
-    if env.get("REPOSITORY_PRIVATE") != "false":
+    if env.get("REPOSITORY_VISIBILITY") != "public":
         raise ValueError("GitHub build provenance requires the release repository to be public")
     ref = env.get("GITHUB_REF", "")
     # Stable and prerelease SemVer tags, without build metadata.
@@ -18,6 +18,8 @@ def check(env):
         raise ValueError("release requires a version tag")
     if env.get("REF_PROTECTED") != "true":
         raise ValueError("release tag is not covered by an active protection rule")
+    if env.get("GITHUB_WORKFLOW_REF") != f"ruohonej/dhcpv4-served/.github/workflows/release.yml@{ref}":
+        raise ValueError("release requires the canonical caller workflow at the version tag")
 
 
 def check_main_history(env, cwd=None):

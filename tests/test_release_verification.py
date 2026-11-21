@@ -15,7 +15,22 @@ from pathlib import Path
 args = sys.argv[1:]
 tool = Path(sys.argv[0]).name
 asset = Path(args[-1]).name
-negative = "modified" if asset == "modified-binary" else "identity" if any(a.endswith("-wrong") for a in args) else "positive"
+negative = "positive"
+if tool == "gh":
+    signer_sha = os.environ["PROVENANCE_SIGNER_SHA"]
+    signer = args[args.index("--signer-workflow") + 1]
+    digest = args[args.index("--signer-digest") + 1]
+    workflow = "ruohonej/dhcpv4-served/.github/workflows/release-build.yml"
+    if signer == f"{workflow}-wrong@{signer_sha}":
+        negative = "identity"
+    elif signer != f"{workflow}@{signer_sha}":
+        sys.exit("unexpected signer workflow")
+    elif digest != signer_sha:
+        negative = "wrong-signer-digest"
+elif args[args.index("--certificate-identity") + 1].endswith("-wrong"):
+    negative = "identity"
+if asset == "modified-binary":
+    negative = "modified"
 label = negative
 if tool == "gh" and negative == "positive" and asset != "dhcpv4-served-linux-amd64":
     label = asset
@@ -29,12 +44,16 @@ if target == os.environ.get("FAIL_AT") or (os.environ.get("FAIL_CONTROL") and ne
 if negative == "positive":
     sys.exit(0)
 if tool == "gh":
+    marker = "✗ Sigstore verification failed"
+    diagnostic = 'Error: verifying with issuer "sigstore.dev"'
+    if negative == "wrong-signer-digest":
+        marker = "✗ Policy verification failed"
+        diagnostic = f"Error: expected BuildSignerDigest to be {digest}, got {signer_sha}"
     if os.environ.get("GH_FORCE_TTY"):
-        marker = "✗ Sigstore verification failed"
         if not os.environ.get("NO_COLOR"):
             marker = "\\x1b[31m" + marker + "\\x1b[0m"
         print(marker)
-    print('Error: verifying with issuer "sigstore.dev"')
+    print(diagnostic)
 elif negative == "modified":
     print("Error: failed to verify signature: could not verify message: invalid signature when validating ASN.1 encoded signature")
 else:
@@ -63,7 +82,8 @@ class VerificationTests(unittest.TestCase):
             executable.write_text(FAKE)
             executable.chmod(0o755)
         self.env = dict(os.environ, PATH=str(bins) + os.pathsep + os.environ["PATH"], GH_FORCE_TTY="", NO_COLOR="",
-                        GITHUB_REF_NAME="v1.2.3", GITHUB_SHA="a" * 40, CALLS=str(self.root / "calls"))
+                        GITHUB_REF_NAME="v1.2.3", GITHUB_SHA="a" * 40, PROVENANCE_SIGNER_SHA="b" * 40,
+                        CALLS=str(self.root / "calls"))
 
     def run_gate(self, **env):
         (self.root / "calls").unlink(missing_ok=True)
@@ -75,11 +95,12 @@ class VerificationTests(unittest.TestCase):
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stderr)
         results = list(self.evidence.glob("*.result.json"))
-        self.assertEqual(len(results), 13)
+        self.assertEqual(len(results), 15)
         self.assertTrue(all(json.loads(p.read_text())["accepted"] for p in results))
         self.assertEqual((self.root / "calls").read_text().splitlines(), [
             "cosign:positive", "cosign:modified", "cosign:positive", "cosign:identity", "cosign:positive",
             "gh:positive", "gh:modified", "gh:positive", "gh:identity", "gh:positive",
+            "gh:wrong-signer-digest", "gh:positive",
             f"gh:{self.deb}", "gh:checksums.txt", f"gh:{self.manifest.name}"])
         self.assertFalse((self.evidence / "modified-binary").exists())
 
@@ -96,7 +117,7 @@ class VerificationTests(unittest.TestCase):
         self.assertNotEqual(self.run_gate().returncode, 0)
 
     def test_operational_errors_cannot_satisfy_any_negative(self):
-        for target in ("cosign:modified", "cosign:identity", "gh:modified", "gh:identity"):
+        for target in ("cosign:modified", "cosign:identity", "gh:modified", "gh:identity", "gh:wrong-signer-digest"):
             for status in ("1", "2", "42", "124", "137"):
                 with self.subTest(target=target, status=status):
                     result = self.run_gate(FAIL_AT=target, STATUS=status)

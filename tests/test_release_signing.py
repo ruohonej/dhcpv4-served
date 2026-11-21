@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +19,7 @@ class ReleaseSigningTests(unittest.TestCase):
         self.assets.mkdir()
         (self.assets / "binary").write_bytes(b"payload")
         (self.assets / "binary.cdx.json").write_text("{}")
-        self.env = dict(os.environ, GITHUB_REF_NAME="v1.2.3", GITHUB_SHA="a" * 40)
+        self.env = dict(os.environ, GITHUB_REF_NAME="v1.2.3", GITHUB_SHA="a" * 40, PROVENANCE_SIGNER_SHA="b" * 40)
 
     def test_manifest_binds_staged_files_and_source(self):
         subprocess.run(["python3", str(ROOT / "scripts/create_release_manifest.py"), str(self.assets)], env=self.env, check=True)
@@ -58,7 +59,8 @@ elif os.environ.get("TEST_FAIL_VERIFY"):
         for line in calls:
             if line.startswith("verify-blob "):
                 self.assertIn("--certificate-oidc-issuer https://token.actions.githubusercontent.com", line)
-                self.assertIn("--certificate-identity https://github.com/ruohonej/dhcpv4-served/.github/workflows/release.yml@refs/tags/v1.2.3", line)
+                identity = f"https://github.com/ruohonej/dhcpv4-served/.github/workflows/release-build.yml@{'b' * 40}"
+                self.assertIn(f"--certificate-identity {identity}", line)
         self.assertTrue((self.assets / "binary.sigstore.json").is_file())
         result = subprocess.run([str(ROOT / "scripts/sign_release_assets.sh"), str(self.assets)], env=self.env, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
@@ -70,6 +72,43 @@ elif os.environ.get("TEST_FAIL_VERIFY"):
         result = subprocess.run([str(ROOT / "scripts/sign_release_assets.sh"), str(self.assets)], env=self.env, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len((self.root / "calls").read_text().splitlines()), 2)
+
+
+class ReleaseArtifactHandoffTests(unittest.TestCase):
+    release_files = (
+        "checksums.txt",
+        "dhcpv4-served-linux-amd64",
+        "dhcpv4-served-linux-amd64.cdx.json",
+        "sbom-bindings.json",
+        "dhcpv4-served_1.2.3~rc.1_linux_amd64.deb",
+        "dhcpv4-served_1.2.3-rc.1_linux_amd64.tar.gz",
+    )
+
+    def unpack(self, names, directory):
+        incoming = directory / "incoming"
+        incoming.mkdir()
+        with ZipFile(incoming / "release-candidate.zip", "w") as archive:
+            for name in names:
+                archive.writestr(name, name)
+        result = subprocess.run(["python3", str(ROOT / "scripts/unpack_release_assets.py"),
+                                 str(incoming), str(directory / "release-assets")], capture_output=True)
+        return result, directory / "release-assets"
+
+    def test_copies_the_staged_artifact_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, assets = self.unpack(self.release_files, Path(directory))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual({p.name: p.read_text() for p in assets.iterdir()},
+                             {name: name for name in self.release_files})
+
+    def test_rejects_missing_nested_and_unexpected_files_before_copying(self):
+        for names in (self.release_files[1:],
+                      ("unexpected/checksums.txt", *self.release_files[1:]),
+                      (*self.release_files, "unexpected.txt")):
+            with self.subTest(names=names), tempfile.TemporaryDirectory() as directory:
+                result, assets = self.unpack(names, Path(directory))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(assets.exists())
 
 
 if __name__ == "__main__":

@@ -15,7 +15,8 @@ class ReleasePolicyTests(unittest.TestCase):
         "GITHUB_REPOSITORY": "ruohonej/dhcpv4-served",
         "GITHUB_EVENT_NAME": "push",
         "GITHUB_REF": "refs/tags/v1.2.3-rc.1",
-        "REPOSITORY_PRIVATE": "false",
+        "GITHUB_WORKFLOW_REF": "ruohonej/dhcpv4-served/.github/workflows/release.yml@refs/tags/v1.2.3-rc.1",
+        "REPOSITORY_VISIBILITY": "public",
         "REF_PROTECTED": "true",
     }
 
@@ -26,13 +27,18 @@ class ReleasePolicyTests(unittest.TestCase):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 policy.check(dict(env, **{key: value}))
 
+    def test_only_canonical_release_workflow_can_call_builder(self):
+        for workflow in ("other.yml@refs/tags/v1.2.3-rc.1", "release.yml@refs/heads/main"):
+            with self.subTest(workflow=workflow), self.assertRaisesRegex(ValueError, "canonical caller workflow"):
+                policy.check(dict(self.public_tag_push, GITHUB_WORKFLOW_REF=f"ruohonej/dhcpv4-served/.github/workflows/{workflow}"))
+
     def test_private_or_unknown_repository_visibility_is_rejected(self):
-        for status in ("true", "null", '"false"'):
+        for status in ("private", "internal", "false", ""):
             with self.subTest(status=status), self.assertRaisesRegex(ValueError, "to be public"):
-                policy.check(dict(self.public_tag_push, REPOSITORY_PRIVATE=status))
+                policy.check(dict(self.public_tag_push, REPOSITORY_VISIBILITY=status))
 
         env = self.public_tag_push.copy()
-        del env["REPOSITORY_PRIVATE"]
+        del env["REPOSITORY_VISIBILITY"]
         with self.assertRaisesRegex(ValueError, "to be public"):
             policy.check(env)
 
