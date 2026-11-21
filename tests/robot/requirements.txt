@@ -1,4 +1,4 @@
 robotframework==7.5.1
 scapy==2.8.0
-hypothesis==6.148.7
+hypothesis==6.170.15
 sortedcontainers==2.4.0
