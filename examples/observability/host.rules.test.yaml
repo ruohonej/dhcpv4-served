@@ -1,0 +1,30 @@
+rule_files: [host.rules.yaml]
+evaluation_interval: 15s
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'dhcp_receipt_expected{host="lab",unit="dhcpv4-served@lan10.service"}'
+        values: '1x8'
+      - series: 'dhcp_last_receipt_timestamp_seconds{host="lab",unit="dhcpv4-served@lan10.service"}'
+        values: '0x8'
+      - series: 'dhcp_update_failed{host="lab"}'
+        values: '0 1x7'
+      - series: 'dhcp_journal_disk_used_ratio{host="lab"}'
+        values: '0.79 0.80x7'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DHCPMissingReceipt
+        exp_alerts: []
+      - eval_time: 5m15s
+        alertname: DHCPMissingReceipt
+        exp_alerts:
+          - exp_labels: {host: lab, unit: dhcpv4-served@lan10.service, owner: deployment-on-call, severity: critical}
+      - eval_time: 1m
+        alertname: DHCPUpdateFailed
+        exp_alerts:
+          - exp_labels: {host: lab, owner: release-owner, severity: critical}
+      - eval_time: 1m
+        alertname: DHCPJournalDiskPressure
+        exp_alerts:
+          - exp_labels: {host: lab, owner: deployment-on-call, severity: warning}

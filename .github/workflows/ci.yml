@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Go and fixture regression tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
+        with:
+          go-version: '1.27.x'
+          check-latest: true
+      - name: Executable contract gates
+        run: |
+          tests/check release
+          tests/check contracts
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: contract-evidence
+          path: work/release-gates.*
+          if-no-files-found: error
+          retention-days: 7
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libseccomp2 python3-venv dnsmasq-base
+          python3 -m venv work/venv
+          work/venv/bin/pip install -r tests/robot/requirements.txt
+      - name: Go checks
+        run: |
+          go test -race ./...
+          CGO_ENABLED=0 go test ./...
+      - name: Fixture regression tests
+        run: |
+          tests/check fixtures
+          tests/check scenarios
+      - name: Malformed activation inputs
+        # These deliberately invalid descriptors cannot be supplied by the
+        # production units. Keep the synthetic launcher only for these cases.
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          CGO_ENABLED=0 go build -o work/dhcpv4-served ./cmd/dhcpv4-served
+          # The unprivileged worker must start even beneath a private checkout.
+          chmod 0700 "$GITHUB_WORKSPACE"
+          tests/acceptance run startup
+      - name: DHCP packet and lease scenarios
+        run: tests/acceptance run dhcp
+      - name: Compare DHCP behavior with dnsmasq
+        run: tests/acceptance run differential
+      - name: Stateful DHCP fuzzing and replay
+        run: |
+          inputs=$(mktemp -d /tmp/dhcp-replay-XXXXXXXX)
+          trap 'rm -rf -- "$inputs"' EXIT
+          cp tests/robot/data/fuzz-replay.json "$inputs/sequence.json"
+          # One ordinary DISCOVER also exercises the packet replay entry point.
+          PYTHONPATH=tests/robot work/venv/bin/python - <<'PYTHON' > "$inputs/packets.json"
+          import json
+          from harness.dhcp_packets import request
+          print(json.dumps([{'link': 'lan10', 'payload': request().hex()}]))
+          PYTHON
+          cd "$inputs"
+          "$GITHUB_WORKSPACE/tests/check" acceptance run fuzz --replay sequence.json --examples 4
+          "$GITHUB_WORKSPACE/tests/acceptance" run fuzz --packet-replay "$inputs/packets.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: fuzz-evidence
+          path: work/acceptance/fuzz/
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: namespace-acceptance-evidence
+          path: |
+            work/acceptance/startup/
+            work/acceptance/dhcp/
+            work/differential/
+          if-no-files-found: ignore
+
+  systemd:
+    name: Ubuntu 26.04 mkosi and systemd-nspawn acceptance
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
+        with:
+          go-version: '1.27.x'
+          check-latest: true
+      - name: Install image and container tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y systemd-container python3-venv ubuntu-keyring \
+            bubblewrap acl attr
+          python3 -m venv work/venv
+          # mkosi v25.3. Pin its commit as the boot/image interfaces evolve.
+          work/venv/bin/pip install 'git+https://github.com/systemd/mkosi.git@54c625c380ef5500f17460981a3c67b109b6a847'
+          work/venv/bin/pip install -r tests/robot/requirements.txt
+      - name: Build the candidate package
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: v2.13.3
+          args: release --snapshot --clean
+      - name: Build Ubuntu userspace and install the DEB
+        run: |
+          packages=(dist/*_linux_$(dpkg --print-architecture).deb)
+          if [ "${#packages[@]}" -ne 1 ] || [ ! -f "${packages[0]}" ]; then
+            echo 'Expected exactly one DEB for the host architecture' >&2
+            exit 1
+          fi
+          PATH="$PWD/work/venv/bin:$PATH" tests/systemd/build.sh "${packages[0]}"
+      - name: Boot systemd and run acceptance tests
+        run: tests/acceptance run package
+      - name: Upload systemd acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: systemd-acceptance-evidence
+          path: work/nspawn-*/
+          if-no-files-found: ignore
+          retention-days: 7

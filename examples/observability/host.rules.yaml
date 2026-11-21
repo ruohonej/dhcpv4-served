@@ -1,0 +1,28 @@
+# Prometheus on the independent host monitoring path. Required site inputs are described in ThreatModel.md.
+groups:
+  - name: dhcp-host
+    interval: 15s
+    rules:
+      - alert: DHCPMissingReceipt
+        expr: |
+          (dhcp_receipt_expected == 1)
+          unless on(host, unit) (time() - dhcp_last_receipt_timestamp_seconds <= 300)
+        labels: {severity: critical, owner: deployment-on-call}
+      - alert: DHCPJournalDiskPressure
+        expr: dhcp_journal_disk_used_ratio >= 0.8
+        labels: {severity: warning, owner: deployment-on-call}
+      - alert: DHCPUnexpectedRestart
+        expr: increase(dhcp_unplanned_restarts_total[5m]) > 0
+        labels: {severity: warning, owner: deployment-on-call}
+      - alert: DHCPHostFailedStarts
+        expr: increase(dhcp_failed_starts_total[5m]) >= 3
+        labels: {severity: critical, owner: deployment-on-call}
+      - alert: DHCPUpdateFailed
+        expr: dhcp_update_failed == 1
+        labels: {severity: critical, owner: release-owner}
+      - alert: DHCPCriticalUpdateOverdue
+        expr: dhcp_critical_update_pending_seconds > 86400
+        labels: {severity: critical, owner: release-owner}
+      - alert: DHCPPrivilegedChange
+        expr: dhcp_unapproved_privileged_change == 1
+        labels: {severity: critical, owner: deployment-on-call}

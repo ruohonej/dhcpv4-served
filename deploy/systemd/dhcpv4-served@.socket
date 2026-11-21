@@ -1,0 +1,16 @@
+[Unit]
+Description=DHCP prototype socket on %i
+
+[Socket]
+ListenDatagram=0.0.0.0:67
+# The systemd 259+ baseline expands the instance specifier here.
+BindToDevice=%i
+Broadcast=yes
+# Preserve ingress metadata on the datagram that triggers service activation.
+# Enabling IP_PKTINFO in the worker is too late for already queued traffic.
+PassPacketInfo=yes
+FileDescriptorName=dhcp
+Accept=no
+
+[Install]
+WantedBy=sockets.target

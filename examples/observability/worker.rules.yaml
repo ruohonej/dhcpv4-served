@@ -1,0 +1,52 @@
+# Loki ruler group. Vector forwards each worker JSON record as one log line.
+groups:
+  - name: dhcp-worker
+    interval: 15s
+    rules:
+      - alert: DHCPWorkerStopped
+        expr: |
+          sum by (host, unit, event_id, reason) (count_over_time({job="dhcpv4-served"} | json
+            | event_id=~"state.failed|worker.stopped" | __error__="" [5m])) > 0
+        labels: {severity: critical, owner: deployment-on-call}
+      - alert: DHCPProtectionLost
+        expr: |
+          sum by (host, unit) (count_over_time({job="dhcpv4-served"} | json
+            | event_id="startup.rejected" | reason=~"abi_missing|protection|privilege"
+            | __error__="" [5m])) > 0
+        labels: {severity: critical, owner: deployment-on-call}
+      - alert: DHCPLabProtectionDegraded
+        expr: |
+          sum by (host, unit) (count_over_time({job="dhcpv4-served"} | json
+            | event_id="security.degraded" | reason="explicit_lab" | __error__="" [5m])) > 0
+        labels: {severity: warning, owner: deployment-on-call}
+      - alert: DHCPActivationFailure
+        expr: |
+          sum by (host, unit) (count_over_time({job="dhcpv4-served"} | json
+            | event_id="startup.rejected" | reason=~"activation|activation_device" | __error__="" [5m])) > 0
+        labels: {severity: warning, owner: deployment-on-call}
+      - alert: DHCPRepeatedStartFailure
+        expr: |
+          sum by (host, unit) (count_over_time({job="dhcpv4-served"} | json
+            | event_id="startup.rejected" | __error__="" [5m])) >= 3
+        labels: {severity: critical, owner: deployment-on-call}
+      - alert: DHCPSustainedPoolPressure
+        expr: |
+          last_over_time({job="dhcpv4-served"} | json | event_id="worker.heartbeat"
+            | unwrap pool_used_percent | __error__="" [90s]) by (host, unit) >= 90
+        for: 5m
+        labels: {severity: warning, owner: deployment-on-call}
+      - alert: DHCPPoolExhausted
+        expr: |
+          max_over_time({job="dhcpv4-served"} | json | event_id="worker.heartbeat"
+            | unwrap exhaustion_ms | __error__="" [2m]) by (host, unit) >= 60000
+        labels: {severity: critical, owner: deployment-on-call}
+      - alert: DHCPRejectSpike
+        expr: |
+          max_over_time({job="dhcpv4-served"} | json | event_id="worker.heartbeat"
+            | unwrap rejected_per_second | __error__="" [2m]) by (host, unit) >= 100
+        labels: {severity: warning, owner: deployment-on-call}
+      - alert: DHCPJournalDeliveryLoss
+        expr: |
+          sum by (host, unit) (count_over_time({job="dhcpv4-served"} | json
+            | audit_delivery="unknown" or delivery_failures > 0 | __error__="" [5m])) > 0
+        labels: {severity: critical, owner: deployment-on-call}

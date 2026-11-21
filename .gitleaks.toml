@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+# Generic API-key rule matched prose about API failure, not a credential.
+# Maintainer review by 2027-02-16; remove if the historical line changes.
+[[allowlists]]
+description = "Historical PROTECTION.md prose; issue 41 security scan triage"
+condition = "AND"
+commits = ["8e9d3db02c1cdfbb1587ddb5379914064247f626"]
+paths = ["^\\.github/PROTECTION\\.md$"]
+regexTarget = "line"
+regexes = ["API failure, missing/truncated file lists"]

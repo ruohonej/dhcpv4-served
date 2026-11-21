@@ -1,0 +1,8 @@
+[
+  ["acquire", "lan10", 0],
+  ["acquire", "lan10", 1],
+  ["acquire", "lan20", 0],
+  ["restart", "lan10", 0],
+  ["retry", "lan10", 1],
+  ["renew", "lan20", 0]
+]

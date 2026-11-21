@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Run a Robot acceptance profile on a disposable Linux host."""
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    profiles = commands.add_parser('run').add_subparsers(dest='profile', required=True)
+    for name, description in {
+        'dhcp': 'DHCP packet and lease scenarios',
+        'startup': 'invalid activation and configuration',
+        'clients': 'real DHCP client acquisition',
+        'differential': 'compare dhcpv4-served with dnsmasq',
+        'package': 'installed package, shipped units, and real clients in systemd',
+        'load': 'package acceptance plus measured load tests',
+    }.items():
+        profiles.add_parser(name, help=description)
+    fuzz = profiles.add_parser('fuzz', help='namespace generation and replay')
+    fuzz.add_argument('--examples', type=int)
+    fuzz.add_argument('--replay', type=Path)
+    fuzz.add_argument('--packet-replay', type=Path)
+    args = parser.parse_args()
+    profile = args.profile
+    if profile == 'fuzz' and args.examples is not None and args.examples < 1:
+        parser.error('--examples must be positive')
+    privilege = [] if os.geteuid() == 0 else ['sudo']
+    if privilege and not shutil.which('sudo'):
+        parser.exit(1, 'This profile requires root or sudo on the test host.\n')
+    if profile in ('package', 'load'):
+        command = ['tests/systemd/run.sh']
+        if profile == 'load':
+            command.append('--load')
+    else:
+        for path in ('work/dhcpv4-served', 'work/venv/bin/python'):
+            if not os.access(ROOT / path, os.X_OK):
+                parser.exit(1, f'Missing executable {path}. See README.md, Development and tests.\n')
+        command = ['unshare', '--user', '--map-users=0,0,65536', '--map-groups=0,0,65536',
+                   '--net', '--mount', '--pid', '--fork', '--mount-proc', 'bash']
+        if profile == 'differential':
+            command.append('tests/robot/run-differential.sh')
+        else:
+            parent = ROOT / 'work/acceptance' / profile
+            parent.mkdir(parents=True, exist_ok=True)
+            output = tempfile.mkdtemp(prefix='run-', dir=parent)
+            print(f'Acceptance evidence: {output}', flush=True)
+            suite = {'dhcp': 'lease_delivery', 'startup': 'startup_rejection',
+                     'clients': 'client_acquisition', 'fuzz': 'fuzz'}[profile]
+            command.extend(['tests/robot/run-suite.sh', suite, output])
+            if profile == 'fuzz':
+                if args.examples is not None:
+                    command.extend(['--examples', str(args.examples)])
+                for flag, source, filename in [('--replay', args.replay, 'sequence.json'),
+                                              ('--packet-replay', args.packet_replay, 'packets.json')]:
+                    if source is None:
+                        continue
+                    # Copy as the caller, before the namespace mounts its private /tmp.
+                    try:
+                        source = source.resolve(strict=True)
+                        if not source.is_file():
+                            parser.error(f'{flag} requires a regular file: {source}')
+                        inputs = Path(output) / 'inputs'
+                        inputs.mkdir(exist_ok=True)
+                        staged = inputs / filename
+                        shutil.copyfile(source, staged)
+                    except (OSError, RuntimeError) as error:
+                        parser.error(f'{flag}: {error}')
+                    command.extend([flag, str(staged)])
+    return subprocess.run(privilege + command, cwd=ROOT).returncode
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -1,0 +1,14 @@
+[Unit]
+Description=dhcpv4-served acceptance tests in a disposable nspawn guest
+After=systemd-journald.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/dhcpv4-served-tests
+ExecStart=/usr/bin/python3 -m robot --outputdir ${DHCPV4_SERVED_ROBOT_OUTPUT} $DHCPV4_SERVED_ROBOT_SELECTION --variable BACKEND:systemd --variable WORKER:/usr/libexec/dhcpv4-served --variable FIXTURE_OUTPUT:/test-output/fixtures suites/package_lifecycle.robot suites/lease_delivery.robot suites/client_acquisition.robot suites/socket_activation.robot suites/renewal_under_load.robot
+# The host checks Robot's output.xml as well as nspawn's exit status.
+ExecStopPost=/usr/bin/systemctl --no-block poweroff
+TimeoutStartSec=25min
+EnvironmentFile=/opt/dhcpv4-served-tests/robot.env
+StandardOutput=journal+console
+StandardError=journal+console

@@ -1,0 +1,49 @@
+version: 2
+
+project_name: dhcpv4-served
+
+builds:
+  - id: dhcpv4-served
+    main: ./cmd/dhcpv4-served
+    binary: dhcpv4-served
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w -X main.buildSHA={{ .FullCommit }} -X main.version=v{{ .Version }}{{ if .IsSnapshot }}-{{ .ShortCommit }}{{ end }}
+
+snapshot:
+  version_template: "{{ .Version }}"
+
+nfpms:
+  - id: packages
+    package_name: dhcpv4-served
+    ids: [dhcpv4-served]
+    vendor: dhcpv4-served contributors
+    homepage: https://github.com/ruohonej/dhcpv4-served
+    maintainer: ruohonej <18260595+ruohonej@users.noreply.github.com>
+    description: Experimental unprivileged DHCPv4 server
+    license: MIT
+    formats: [deb]
+    bindir: /usr/libexec
+    contents:
+      - src: deploy/systemd/dhcpv4-served@.service
+        dst: /usr/lib/systemd/system/dhcpv4-served@.service
+        file_info:
+          mode: 0644
+      - src: deploy/systemd/dhcpv4-served@.socket
+        dst: /usr/lib/systemd/system/dhcpv4-served@.socket
+        file_info:
+          mode: 0644
+      - src: LICENSE
+        dst: /usr/share/doc/dhcpv4-served/LICENSE
+        file_info:
+          mode: 0644
+      - src: NOTICE
+        dst: /usr/share/doc/dhcpv4-served/NOTICE
+        file_info:
+          mode: 0644
+
+checksum:
+  name_template: checksums.txt

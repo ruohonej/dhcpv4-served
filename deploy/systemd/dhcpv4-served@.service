@@ -1,0 +1,60 @@
+[Unit]
+Description=Unprivileged DHCP worker on %i
+Requires=dhcpv4-served@%i.socket
+After=dhcpv4-served@%i.socket
+
+[Service]
+Type=simple
+DynamicUser=yes
+# Without User=, template instances share the identity derived from the prefix.
+User=dhcpv4-served-%i
+StateDirectory=dhcpv4-served-%i
+StateDirectoryMode=0700
+# DynamicUser exposes /var/lib/dhcpv4-served-%i as a symlink. The store requires a
+# directory final component (O_NOFOLLOW), so use its underlying private path.
+ExecStart=/usr/libexec/dhcpv4-served --security-profile=strict --interface %i --state-dir /var/lib/private/dhcpv4-served-%i --config /etc/dhcpv4-served/%i.yaml
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+LimitCORE=0
+# Initial issue #37 ceilings; qualification requires measured load evidence.
+MemoryMax=256M
+TasksMax=128
+CPUQuota=50%
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=disconnected
+PrivateDevices=yes
+PrivateIPC=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=strict
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+# PrivatePIDs breaks DynamicUser + StateDirectory id-mapped mounts on the
+# systemd 259 baseline (systemd/systemd#41014). Keep proc visibility restricted
+# above; restore a private PID namespace once the supported systemd fixes this.
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+RemoveIPC=yes
+# UDP and journal descriptors are inherited. UNIX sockets permit startup queries
+# to resolved Varlink; route netlink monitors link identity.
+RestrictAddressFamilies=AF_NETLINK AF_UNIX
+SocketBindDeny=any
+# Use systemd-maintained groups for runtime/network compatibility and Landlock.
+# Deployment baseline: Ubuntu 26.04/systemd 259 and Linux 6.18+.
+SystemCallArchitectures=native
+SystemCallFilter=@system-service @sandbox
+SystemCallFilter=~@privileged @resources @keyring @memlock @setuid @aio @ipc
+SystemCallErrorNumber=EPERM
+UMask=0077

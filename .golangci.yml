@@ -1,0 +1,16 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gosec
+  exclusions:
+    generated: strict
+    rules:
+      # Keep the previous gosec scope (production packages); test fixtures
+      # intentionally invoke subprocesses and exercise unsafe operations.
+      - path: _test\.go
+        linters: [gosec, errcheck]
+
+run:
+  timeout: 5m

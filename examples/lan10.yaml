@@ -1,0 +1,10 @@
+pool:
+  start: 192.168.10.100
+  end: 192.168.10.200
+excluded_addresses: []
+router: 192.168.10.1
+dns_servers: [192.168.10.1]
+lease_duration: 12h
+offer_duration: 60s
+decline_duration: 10m
+authoritative: false

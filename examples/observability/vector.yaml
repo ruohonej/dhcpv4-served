@@ -1,0 +1,37 @@
+# Operator-supplied Vector example. Provision the endpoint, PKI and disk budget first.
+data_dir: /var/lib/vector
+sources:
+  worker:
+    type: journald
+    include_units: [dhcpv4-served@lan10.service, dhcpv4-served@lan20.service]
+transforms:
+  records:
+    type: filter
+    inputs: [worker]
+    condition: |
+      record = parse_json(.message) ?? {}
+      record.schema_version == 1 && is_string(record.event_id)
+sinks:
+  central:
+    type: loki
+    inputs: [records]
+    endpoint: "${DHCP_LOKI_ENDPOINT}"
+    labels:
+      job: dhcpv4-served
+      host: "{{ host }}"
+      unit: "{{ _SYSTEMD_UNIT }}"
+    structured_metadata:
+      invocation_id: "{{ _SYSTEMD_INVOCATION_ID }}"
+      boot_id: "{{ _BOOT_ID }}"
+    encoding:
+      codec: text
+    tls:
+      ca_file: /etc/vector/pki/ca.pem
+      crt_file: /etc/vector/pki/collector.pem
+      key_file: /etc/vector/pki/collector.key
+      verify_certificate: true
+      verify_hostname: true
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: drop_newest

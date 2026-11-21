@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+
+usage() {
+    echo 'Usage: tests/check [local|go|fixtures|scenarios|release|contracts|acceptance run PROFILE [OPTIONS]]'
+    echo 'local runs Go tests, Python regressions, Robot dry runs, and executable contract gates.'
+}
+
+group=${1:-local}
+if [[ $# -gt 0 ]]; then shift; fi
+if [[ $group == acceptance ]]; then exec "$(dirname "$0")/acceptance" "$@"; fi
+cd "$(dirname "$0")/.."
+if [[ $# != 0 ]]; then usage >&2; exit 2; fi
+case "$group" in
+    --help|-h) usage ;;
+    local)
+        for check in go fixtures scenarios release contracts; do tests/check "$check"; done ;;
+    go) exec go test ./... ;;
+    fixtures) exec work/venv/bin/python -m unittest discover -s tests/robot/regression -t tests/robot -p 'test_*.py' ;;
+    scenarios) exec work/venv/bin/python -m robot --pythonpath tests/robot --dryrun --variable BACKEND:systemd \
+        --outputdir work/acceptance/dryrun tests/robot/suites/*.robot ;;
+    release) exec python3 -m unittest discover -s tests -p 'test_*.py' ;;
+    contracts) exec python3 tests/release_gates.py ;;
+    *) usage >&2; exit 2 ;;
+esac
