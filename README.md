@@ -51,12 +51,12 @@ sudo systemctl stop dhcpv4-served@lan10.service
 systemctl is-active dhcpv4-served@lan10.socket dhcpv4-served@lan10.service
 ```
 
-For a published DEB, verify the package and signed manifest before installation. Select the expected tag and source revision independently and obtain Cosign v3 from a trusted distribution. With `tag` set to the expected tag and `deb` to the exact downloaded filename, run these commands in the download directory. Compare the verified manifest's `version`, `source_sha`, and artifact digest with the expected release and local file. [Release workflow](.github/workflows/release.yml)
+For a published DEB, verify the package and signed manifest before installation. Set `tag` to the expected release tag, `source_sha` to the independently reviewed release commit, `signer_sha` to the independently reviewed commit that pins the reusable release builder, and `deb` to the exact downloaded filename. Obtain Cosign v3 from a trusted distribution and run these commands in the download directory. Compare the verified manifest's `version`, `source_sha`, and artifact digest with the expected release and local file. [Release workflow](.github/workflows/release.yml) · [Reusable builder](.github/workflows/release-build.yml)
 
 ```sh
 (
   set -eu
-  identity="https://github.com/ruohonej/dhcpv4-served/.github/workflows/release.yml@refs/tags/${tag:?set tag}"
+  identity="https://github.com/ruohonej/dhcpv4-served/.github/workflows/release-build.yml@${signer_sha:?set signer_sha}"
   for asset in "${deb:?set deb}" release-manifest.json; do
     cosign verify-blob --bundle "$asset.sigstore.json" \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
@@ -67,18 +67,19 @@ For a published DEB, verify the package and signed manifest before installation.
 )
 ```
 
-The release also includes `provenance.sigstore.jsonl` and its Cosign signature. Verify the signature using the same workflow identity, then verify the DEB's build provenance with GitHub CLI v2.103.3 from a trusted distribution. Set `source_sha` to the independently reviewed full commit SHA and use the same `tag` and `deb` values as above:
+Verify the signature on `provenance.sigstore.jsonl`, then verify the DEB's build provenance with GitHub CLI v2.103.3 from a trusted distribution. Use the same independently selected tag and full commit SHAs.
 
 ```sh
 (
   set -eu
-  identity="https://github.com/ruohonej/dhcpv4-served/.github/workflows/release.yml@refs/tags/${tag:?set tag}"
+  signer="ruohonej/dhcpv4-served/.github/workflows/release-build.yml@${signer_sha:?set signer_sha}"
   cosign verify-blob --bundle provenance.sigstore.jsonl.sigstore.json \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-    --certificate-identity "$identity" provenance.sigstore.jsonl
+    --certificate-identity "https://github.com/$signer" provenance.sigstore.jsonl
   gh attestation verify "${deb:?set deb}" --repo ruohonej/dhcpv4-served \
     --bundle provenance.sigstore.jsonl --cert-oidc-issuer https://token.actions.githubusercontent.com \
-    --cert-identity "$identity" --source-ref "refs/tags/$tag" \
+    --signer-workflow "$signer" --signer-digest "$signer_sha" \
+    --source-ref "refs/tags/${tag:?set tag}" \
     --source-digest "${source_sha:?set source_sha}" --deny-self-hosted-runners
 )
 ```
