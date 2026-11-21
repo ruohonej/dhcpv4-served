@@ -17,39 +17,11 @@ func wire(t *testing.T, options []byte) []byte {
 	return append(p.ToBytes()[:240:240], options...)
 }
 
-func TestConcatenationAndOverload(t *testing.T) {
-	for _, overload := range []byte{1, 2, 3} {
-		t.Run(string(rune('0'+overload)), func(t *testing.T) {
-			data := wire(t, []byte{53, 1, 1, 0, 52, 1, overload, 61, 2, 1, 'a', 0, 61, 1, 'b', 255})
-			expected := []byte{1, 'a', 'b'}
-			if overload&1 != 0 {
-				copy(data[108:236], []byte{61, 1, 'c', 255})
-				expected = append(expected, 'c')
-			}
-			if overload&2 != 0 {
-				copy(data[44:108], []byte{61, 1, 'd', 255})
-				expected = append(expected, 'd')
-			}
-			// Establish the pinned library's limitation separately from our adapter.
-			raw, err := dhcpv4.FromBytes(data)
-			if err != nil || !bytes.Equal(raw.Options[61], []byte{1, 'a', 'b'}) {
-				t.Fatalf("library main concatenation: %v", err)
-			}
-			p, err := Parse(data)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(p.Options[61], expected) {
-				t.Fatalf("identity %x want %x", p.Options[61], expected)
-			}
-			round, err := Parse(p.ToBytes())
-			if err != nil || !bytes.Equal(round.Options[61], expected) {
-				t.Fatalf("round trip: %v", err)
-			}
-			if _, ok := p.Options[52]; ok {
-				t.Fatal("retained overload after normalization")
-			}
-		})
+func TestConcatenation(t *testing.T) {
+	data := wire(t, []byte{53, 1, 1, 61, 2, 1, 'a', 61, 1, 'b', 255})
+	p, err := Parse(data)
+	if err != nil || !bytes.Equal(p.Options[61], []byte{1, 'a', 'b'}) {
+		t.Fatalf("main option concatenation: %v", err)
 	}
 }
 
@@ -77,6 +49,10 @@ func TestMalformedOptions(t *testing.T) {
 		"empty-id":              {53, 1, 1, 61, 0, 255},
 		"short-id":              {53, 1, 1, 61, 1, 1, 255},
 		"invalid-overload":      {53, 1, 1, 52, 1, 4, 255},
+		"overload-file":         {53, 1, 1, 52, 1, 1, 255},
+		"overload-sname":        {53, 1, 1, 52, 1, 2, 255},
+		"overload-both":         {53, 1, 1, 52, 1, 3, 255},
+		"overload-empty":        {53, 1, 1, 52, 0, 255},
 		"duplicate-overload":    {53, 1, 1, 52, 1, 1, 52, 1, 2, 255},
 		"missing-message-type":  {61, 2, 1, 2, 255},
 		"short-address":         {53, 1, 1, 50, 3, 1, 2, 3, 255},
@@ -85,15 +61,6 @@ func TestMalformedOptions(t *testing.T) {
 	for name, opts := range cases {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Parse(wire(t, opts)); !errors.Is(err, ErrMalformedPacket) {
-				t.Fatalf("expected malformed-packet sentinel: %v", err)
-			}
-		})
-	}
-	for name, field := range map[string][]byte{"nested": {52, 1, 1, 255}, "nested-empty": {52, 0, 255}, "truncated": {61, 255, 1}} {
-		t.Run(name, func(t *testing.T) {
-			data := wire(t, []byte{53, 1, 1, 52, 1, 1, 255})
-			copy(data[108:236], field)
-			if _, err := Parse(data); !errors.Is(err, ErrMalformedPacket) {
 				t.Fatalf("expected malformed-packet sentinel: %v", err)
 			}
 		})
@@ -114,18 +81,13 @@ func TestLibraryOptionTolerance(t *testing.T) {
 	cases := []struct {
 		name    string
 		options []byte
-		file    []byte
 		wantID  []byte
 	}{
-		{"main-after-end", []byte{53, 1, 1, 255, 61, 2, 1, 2}, nil, nil},
-		{"empty-then-valid-overload", []byte{53, 1, 1, 52, 0, 52, 1, 1, 255}, nil, nil},
-		{"overload-missing-end", []byte{53, 1, 1, 52, 1, 1, 255}, []byte{61, 2, 1, 2}, []byte{1, 2}},
-		{"overload-after-end", []byte{53, 1, 1, 52, 1, 1, 255}, []byte{255, 61, 2, 1, 2}, nil},
+		{"main-after-end", []byte{53, 1, 1, 255, 61, 2, 1, 2}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			data := wire(t, tc.options)
-			copy(data[108:236], tc.file)
 			p, err := Parse(data)
 			if err != nil {
 				t.Fatal(err)

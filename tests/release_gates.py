@@ -18,7 +18,7 @@ GATES = {
     "restart-reservations": [("lease", "TestGateRestartReservations")],
     "input-validation": [("config", "TestLoad"), ("config", "TestValidateLink"),
                          ("config", "TestValidateMultiple"), ("protocol", "TestMalformedOptions"),
-                         ("protocol", "TestConcatenationAndOverload"),
+                         ("protocol", "TestConcatenation"),
                          ("server", "TestRelayFieldsDoNotReserveAddress")],
     "socket-and-link": [("activation", "TestRejectActivation"), ("transport", "TestMetadata"),
                         ("transport", "TestMonitorRejectsReplacementAndLostEvents")],
