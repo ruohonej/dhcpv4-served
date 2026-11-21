@@ -7,7 +7,7 @@ require (
 	github.com/landlock-lsm/go-landlock v0.11.2
 	github.com/mdlayher/netlink v1.11.2
 	github.com/varlink/go/v2 v2.0.0-20260611234345-b30f18e21e83
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/sys v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
 )
