@@ -21,6 +21,13 @@ def classify(name, expected, status, output, identity):
         else:
             return False
         return re.search(diagnostic + r"\s*$", output) is not None
+    if name.startswith("provenance-") and expected in ("digest", "identity"):
+        # gh 2.103.3 discards the underlying Sigstore error. Both the specific
+        # stage marker and public Sigstore issuer error are required.
+        # TUF, network, credential, bundle-loading and argument errors differ.
+        return ("✗ Sigstore verification failed" in output.splitlines()
+                and re.search(r'Error: verifying with issuer "sigstore\.dev"\s*$', output)
+                is not None)
     return False
 
 

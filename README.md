@@ -67,6 +67,24 @@ For a published DEB, verify the package and signed manifest before installation.
 )
 ```
 
+The release also includes `provenance.sigstore.jsonl` and its Cosign signature. Verify the signature using the same workflow identity, then verify the DEB's build provenance with GitHub CLI v2.103.3 from a trusted distribution. Set `source_sha` to the independently reviewed full commit SHA and use the same `tag` and `deb` values as above:
+
+```sh
+(
+  set -eu
+  identity="https://github.com/ruohonej/dhcpv4-served/.github/workflows/release.yml@refs/tags/${tag:?set tag}"
+  cosign verify-blob --bundle provenance.sigstore.jsonl.sigstore.json \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    --certificate-identity "$identity" provenance.sigstore.jsonl
+  gh attestation verify "${deb:?set deb}" --repo ruohonej/dhcpv4-served \
+    --bundle provenance.sigstore.jsonl --cert-oidc-issuer https://token.actions.githubusercontent.com \
+    --cert-identity "$identity" --source-ref "refs/tags/$tag" \
+    --source-digest "${source_sha:?set source_sha}" --deny-self-hosted-runners
+)
+```
+
+Repeat the provenance verification for each release artifact you intend to use. A verified attestation identifies its build; review the source and build inputs separately. Live attestation and negative verification checks remain to be qualified on a candidate release.
+
 ## Default configuration
 
 On an isolated link already up with exactly one IPv4 address, start `dhcpv4-served@INTERFACE.socket` without creating `/etc/dhcpv4-served/INTERFACE.yaml` to serve the subnet's usable addresses, excluding the host. The host is advertised as the router, so it must be configured to forward client traffic. The worker snapshots usable IPv4 DNS servers from systemd-resolved over Varlink, excluding route-only and strict DNS-over-TLS scopes, and omits DNS when unavailable. These settings do not configure the link, routing or DNS services.

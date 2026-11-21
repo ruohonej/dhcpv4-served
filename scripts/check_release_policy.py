@@ -10,6 +10,8 @@ def check(env):
         raise ValueError("release repository is not authorized")
     if env.get("GITHUB_EVENT_NAME") != "push":
         raise ValueError("release requires a push event")
+    if env.get("REPOSITORY_PRIVATE") != "false":
+        raise ValueError("GitHub build provenance requires the release repository to be public")
     ref = env.get("GITHUB_REF", "")
     # Stable and prerelease SemVer tags, without build metadata.
     if not re.fullmatch(r"refs/tags/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?", ref):
