@@ -144,6 +144,10 @@ class SystemdBackend(FastBackend):
                 raise RuntimeError('Guest systemd 259+ is required')
             if report.get('landlock_abi') is None or report['landlock_abi'] < 7:
                 raise RuntimeError('Production strict-profile acceptance requires enabled Landlock ABI 7+')
+            if os.environ.get('DHCPV4_SERVED_REQUIRE_APPARMOR') == '1':
+                result = run('systemd-analyze', 'condition', 'ConditionSecurity=apparmor', check=False)
+                if result.returncode:
+                    raise RuntimeError(f'Guest systemd cannot detect AppArmor: {result.stdout} {result.stderr}')
             run('systemd-analyze', 'verify', '--man=no', 'dhcpv4-served@lan10.socket', 'dhcpv4-served@lan10.service')
             SystemdBackend.prepared = True
 
@@ -257,6 +261,11 @@ class SystemdBackend(FastBackend):
                            if line.startswith('Uid:')))
             uids.append(uid)
             assert prop(process.unit, 'DynamicUser') == 'yes'
+            apparmor = Path('/sys/module/apparmor/parameters/enabled')
+            if os.environ.get('DHCPV4_SERVED_REQUIRE_APPARMOR') == '1' or (
+                    apparmor.is_file() and apparmor.read_text().strip() == 'Y'):
+                label = Path(f'/proc/{process.pid}/attr/current').read_text().strip()
+                assert label == 'dhcpv4-served (enforce)', label
             assert prop(process.unit, 'ProtectProc') == 'invisible'
             assert prop(process.unit, 'ProcSubset') == 'pid'
             state = Path(f'/proc/{process.pid}/root/var/lib/dhcpv4-served-{link}')
@@ -487,9 +496,11 @@ class SystemdBackend(FastBackend):
 
     def check_sandbox(self):
         original = Path('/usr/lib/systemd/system/dhcpv4-served@.service').read_text()
+        # The Python probe tests systemd/DAC in isolation, not the worker's
+        # executable-specific AppArmor and Landlock policies.
         lines = ['ExecStart=/usr/bin/python3 /opt/dhcpv4-served-tests/harness/sandbox_probe.py'
                  if line.startswith('ExecStart=') else line for line in original.splitlines()
-                 if not line.startswith(('Requires=', 'After='))]
+                 if not line.startswith(('Requires=', 'After=', 'AppArmorProfile='))]
         Path('/run/systemd/system/dhcpv4-served@probe.service').write_text('\n'.join(lines) + '\n')
         peer_lines = [line + ' hold' if line.startswith('ExecStart=') else line for line in lines]
         Path('/run/systemd/system/dhcpv4-served@peer.service').write_text('\n'.join(peer_lines) + '\n')

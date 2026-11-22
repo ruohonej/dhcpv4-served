@@ -98,6 +98,8 @@ jobs:
     name: Ubuntu 26.04 mkosi and systemd-nspawn acceptance
     runs-on: ubuntu-26.04
     timeout-minutes: 25
+    env:
+      DHCPV4_SERVED_REQUIRE_APPARMOR: ${{ vars.DHCPV4_SERVED_TEST_APPARMOR == '1' && '1' || '0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -109,7 +111,7 @@ jobs:
       - name: Install image and container tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y systemd-container python3-venv ubuntu-keyring \
+          sudo apt-get install -y apparmor systemd-container python3-venv ubuntu-keyring \
             bubblewrap acl attr
           python3 -m venv work/venv
           # mkosi v25.3. Pin its commit as the boot/image interfaces evolve.
@@ -129,8 +131,22 @@ jobs:
             exit 1
           fi
           PATH="$PWD/work/venv/bin:$PATH" tests/systemd/build.sh "${packages[0]}"
+      - name: Load candidate AppArmor profile
+        if: ${{ vars.DHCPV4_SERVED_TEST_APPARMOR == '1' }}
+        run: |
+          test "$(cat /sys/module/apparmor/parameters/enabled)" = Y
+          cat /sys/kernel/security/lsm
+          packages=(dist/*_linux_$(dpkg --print-architecture).deb)
+          dpkg-deb -x "${packages[0]}" work/apparmor-package
+          sudo apparmor_parser -r work/apparmor-package/etc/apparmor.d/dhcpv4-served
+          sudo grep -Fx 'dhcpv4-served (enforce)' /sys/kernel/security/apparmor/profiles
       - name: Boot systemd and run acceptance tests
-        run: tests/acceptance run package
+        run: sudo env DHCPV4_SERVED_REQUIRE_APPARMOR="$DHCPV4_SERVED_REQUIRE_APPARMOR" tests/systemd/run.sh
+      - name: Report AppArmor denials
+        if: failure()
+        run: |
+          sudo journalctl -k -b --no-pager | grep -i 'apparmor' || true
+          sudo find work -path '*/fixtures/*-journal.txt' -type f -exec sh -c 'echo "$1"; cat "$1"' _ {} \; || true
       - name: Upload systemd acceptance evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

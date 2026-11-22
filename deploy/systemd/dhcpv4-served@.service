@@ -24,6 +24,7 @@ CPUQuota=50%
 CapabilityBoundingSet=
 AmbientCapabilities=
 NoNewPrivileges=yes
+AppArmorProfile=dhcpv4-served
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=disconnected
