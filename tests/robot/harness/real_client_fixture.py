@@ -260,6 +260,9 @@ def run_client(name, binary, args, out, state_root):
         parent.send("configure")
         if not receive(parent, 5).get("ready"):
             raise RuntimeError("client link setup failed")
+        config = state_root / "lan10.yaml"
+        config.write_text("pool:\n  start: 192.168.10.2\n  end: 192.168.10.254\nrouter: 192.168.10.1\nlease_duration: 12h\noffer_duration: 60s\ndecline_duration: 10m\n")
+        config.chmod(0o644)
         server = worker(args.worker, "lan10", out / "worker.log", configure=False, base=state_root)
         wait_for_worker(server, out / "worker.log")
         parent.send(True)

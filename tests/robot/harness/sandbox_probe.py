@@ -42,9 +42,7 @@ if __name__ == '__main__':
         assert Path('/etc/dhcpv4-served/unrelated').read_text() == 'unrelated\n'
         denied(lambda: os.setuid(os.getuid()))
         denied(lambda: socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
-        # The worker uses AF_UNIX to query resolved over Varlink before Landlock.
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM):
-            pass
+        denied(lambda: socket.socket(socket.AF_UNIX, socket.SOCK_STREAM))
         # Proc visibility remains enforced while PrivatePIDs is unavailable on
         # the baseline: guest PID 1 belongs to another user and is hidden.
         assert Path('/proc/self/status').is_file()

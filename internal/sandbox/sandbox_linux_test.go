@@ -207,7 +207,7 @@ func TestSystemdFilterChild(t *testing.T) {
 	if os.Getenv("SYSTEMD_FILTER_TEST") != "1" {
 		return
 	}
-	for _, family := range []int{unix.AF_INET, unix.AF_INET6, unix.AF_PACKET} {
+	for _, family := range []int{unix.AF_INET, unix.AF_INET6, unix.AF_PACKET, unix.AF_UNIX} {
 		fd, err := unix.Socket(family, unix.SOCK_DGRAM, 0)
 		if fd >= 0 {
 			unix.Close(fd)
@@ -216,11 +216,6 @@ func TestSystemdFilterChild(t *testing.T) {
 			t.Errorf("socket family %d: want EPERM, got %v", family, err)
 		}
 	}
-	unixFD, err := unix.Socket(unix.AF_UNIX, unix.SOCK_STREAM, 0)
-	if err != nil {
-		t.Fatalf("UNIX socket blocked: %v", err)
-	}
-	unix.Close(unixFD)
 	if err := unix.Setpriority(unix.PRIO_PROCESS, 0, 0); !errors.Is(err, unix.EPERM) {
 		t.Errorf("resource changes: want EPERM, got %v", err)
 	}

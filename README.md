@@ -86,11 +86,18 @@ Verify the signature on `provenance.sigstore.jsonl`, then verify the DEB's build
 
 Repeat the provenance verification for each release artifact you intend to use. A verified attestation identifies its build; review the source and build inputs separately. Live attestation and negative verification checks remain to be qualified on a candidate release.
 
-## Default configuration
+## Initialize configuration
 
-On an isolated link already up with exactly one IPv4 address, start `dhcpv4-served@INTERFACE.socket` without creating `/etc/dhcpv4-served/INTERFACE.yaml` to serve the subnet's usable addresses, excluding the host. The host is advertised as the router, so it must be configured to forward client traffic. The worker snapshots usable IPv4 DNS servers from systemd-resolved over Varlink, excluding route-only and strict DNS-over-TLS scopes, and omits DNS when unavailable. These settings do not configure the link, routing or DNS services.
-
-The default pool includes addresses assigned statically by other means and the worker does not probe for conflicts. Use this mode only on an isolated link where the whole pool is available to this server. For exclusions or different settings, provide a trusted YAML file as above. An invalid or unreadable file stops startup. Changes to the link or pool can make existing lease state incompatible; follow the [recovery rules](TechnicalSpecification.md#persistence-and-recovery). [Default settings](TechnicalSpecification.md#configuration-and-startup)
+On an isolated link that is up with exactly one IPv4 address, run
+`sudo dhcpv4-srvctl init --interface lan10` before starting the socket. The
+command writes `/etc/dhcpv4-served/lan10.yaml` and prints the selected settings.
+It allocates the subnet's usable addresses except the host and advertises the
+host as router. The whole pool must be available to this server, and the host
+must forward client traffic if routing is needed. The command snapshots usable
+DNS servers from systemd-resolved and omits DNS if discovery fails. Review the
+configuration before arming the socket. If the worker reports `config_missing`,
+run `dhcpv4-srvctl init --interface IFACE` and rearm the socket. For a different pool or exclusions, edit
+the YAML and validate it using `dhcpv4-served validate`.
 
 ## Development and tests
 

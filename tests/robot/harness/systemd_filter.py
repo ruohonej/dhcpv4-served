@@ -26,7 +26,7 @@ def install():
             families = value.split()
         elif key == "SystemCallErrorNumber" and value != "EPERM":
             raise ValueError("test wrapper expects SystemCallErrorNumber=EPERM")
-    if not filters or filters[0][0] or families != ["AF_NETLINK", "AF_UNIX"]:
+    if not filters or filters[0][0] or families != ["AF_NETLINK"]:
         raise ValueError("update test wrapper for changed unit policy")
 
     def expand(entries):
@@ -76,7 +76,7 @@ def install():
             # Unknown aliases and pseudo-numbers cannot add a native rule.
             if number < 0:
                 continue
-            for family in ([socket.AF_NETLINK, socket.AF_UNIX] if name == "socket" else [None]):
+            for family in ([socket.AF_NETLINK] if name == "socket" else [None]):
                 comparison = ArgCmp(0, 4, family or 0, 0)  # SCMP_CMP_EQ
                 count = 1 if family is not None else 0
                 result = sec.seccomp_rule_add_array(ctx, allow, number, count,

@@ -79,6 +79,8 @@ class ReleaseArtifactHandoffTests(unittest.TestCase):
         "checksums.txt",
         "dhcpv4-served-linux-amd64",
         "dhcpv4-served-linux-amd64.cdx.json",
+        "dhcpv4-srvctl-linux-amd64",
+        "dhcpv4-srvctl-linux-amd64.cdx.json",
         "sbom-bindings.json",
         "dhcpv4-served_1.2.3~rc.1_linux_amd64.deb",
         "dhcpv4-served_1.2.3-rc.1_linux_amd64.tar.gz",

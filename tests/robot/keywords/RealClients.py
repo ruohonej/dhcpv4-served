@@ -70,6 +70,7 @@ class RealClients:
                 self.backend.client_bind_port = False
                 self.backend.create(configure=False)
                 self.backend.clear_configuration()
+                subprocess.run(['/usr/bin/dhcpv4-srvctl', 'init', '--interface', 'lan10'], check=True)
                 self.result = self.backend.run_real_client(self.client, self.binary, self.run / self.client)
             else:
                 self.result = fixture.run_case(self.client, self.binary,

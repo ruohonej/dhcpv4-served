@@ -10,6 +10,7 @@ import tarfile
 
 PAYLOAD = {
     'usr/libexec/dhcpv4-served': 0o755,
+    'usr/bin/dhcpv4-srvctl': 0o755,
     'usr/lib/systemd/system/dhcpv4-served@.service': 0o644,
     'usr/lib/systemd/system/dhcpv4-served@.socket': 0o644,
     'usr/share/doc/dhcpv4-served/LICENSE': 0o644,

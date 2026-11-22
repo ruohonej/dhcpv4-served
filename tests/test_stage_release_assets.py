@@ -19,11 +19,14 @@ class StageReleaseAssetsTests(unittest.TestCase):
                 binary = dist / f"dhcpv4-served_linux_{arch}_v1" / "dhcpv4-served"
                 binary.parent.mkdir()
                 binary.write_text(arch)
+            utility = dist / "dhcpv4-srvctl_linux_amd64_v1" / "dhcpv4-srvctl"
+            utility.parent.mkdir()
+            utility.write_text("srvctl")
             output = root / "release-assets"
             subprocess.run([str(SCRIPT), str(dist), str(output)], check=True)
             self.assertEqual({p.name for p in output.iterdir()}, {
                 "dhcpv4-served.tar.gz", "dhcpv4-served.deb", "checksums.txt",
-                "dhcpv4-served-linux-amd64",
+                "dhcpv4-served-linux-amd64", "dhcpv4-srvctl-linux-amd64",
             })
             self.assertEqual((output / "dhcpv4-served-linux-amd64").read_text(), "amd64")
 
