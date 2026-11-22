@@ -33,7 +33,10 @@ Systemd rejects ambiguous server addresses
     When a worker starts with    ambiguous server addresses
     Then the worker rejects startup
 
-Systemd serves and recovers leases without configuration
+Systemd rejects a missing configuration
+    Then systemd rejects missing configuration
+
+Systemd serves and recovers leases with generated configuration
     Then systemd serves with default configuration
 
 Systemd rejects untrusted configuration and recovers after repair

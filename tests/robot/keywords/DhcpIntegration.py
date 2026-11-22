@@ -194,6 +194,9 @@ class DhcpIntegration:
     def the_repaired_link_grants_a_lease_and_the_healthy_peer_renews(self):
         self.backend.check_control_recovery()
 
+    def systemd_rejects_missing_configuration(self):
+        self.backend.check_missing_configuration()
+
     def systemd_serves_with_default_configuration(self):
         self.backend.check_default_configuration()
 

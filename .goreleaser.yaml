@@ -13,6 +13,14 @@ builds:
     ldflags:
       - -s -w -X main.buildSHA={{ .FullCommit }} -X main.version=v{{ .Version }}{{ if .IsSnapshot }}-{{ .ShortCommit }}{{ end }}
 
+  - id: dhcpv4-srvctl
+    main: ./cmd/dhcpv4-srvctl
+    binary: dhcpv4-srvctl
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64]
+
 snapshot:
   version_template: "{{ .Version }}"
 
@@ -28,6 +36,10 @@ nfpms:
     formats: [deb]
     bindir: /usr/libexec
     contents:
+      - src: dist/dhcpv4-srvctl_linux_amd64_v1/dhcpv4-srvctl
+        dst: /usr/bin/dhcpv4-srvctl
+        file_info:
+          mode: 0755
       - src: deploy/systemd/dhcpv4-served@.service
         dst: /usr/lib/systemd/system/dhcpv4-served@.service
         file_info:

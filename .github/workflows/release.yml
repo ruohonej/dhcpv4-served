@@ -55,4 +55,4 @@ jobs:
       id-token: write
       attestations: write
     # Pin the trusted builder independently of the source tag.
-    uses: ruohonej/dhcpv4-served/.github/workflows/release-build.yml@5d8d58a6092a02d15834dcd2218555d700d384db
+    uses: ruohonej/dhcpv4-served/.github/workflows/release-build.yml@5f32cfba86115c5b27263ef1adf12a631f687957

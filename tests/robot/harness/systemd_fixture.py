@@ -367,6 +367,20 @@ class SystemdBackend(FastBackend):
             'recovered_invocation': recovered, 'peer_invocation': peer,
         }, indent=2))
 
+    def check_missing_configuration(self):
+        Path('/etc/dhcpv4-served/lan10.yaml').unlink()
+        cursor = journal_cursor()
+        self.start()
+        self.exchange('lan10', probe.request())
+        assert self.replies == [], self.replies
+        service = self.workers['lan10']
+        service.wait(timeout=5)
+        output = run('journalctl', '-b', '--no-pager', '-u', service.unit,
+                     '--after-cursor=' + cursor, '--output=cat').stdout
+        events = probe.worker_events(output)
+        assert any(event.get('event_id') == 'startup.rejected'
+                   and event.get('reason') == 'config_missing' for event in events), output
+
     def check_default_configuration(self):
         Path('/etc/dhcpv4-served/lan10.yaml').unlink()
         # Start the real resolver and configure a general-purpose link and a
@@ -380,6 +394,7 @@ class SystemdBackend(FastBackend):
             run('resolvectl', 'dns', 'lan20', split_dns)
             run('resolvectl', 'domain', 'lan20', '~internal.example')
             run('resolvectl', 'default-route', 'lan20', 'no')
+            run('/usr/bin/dhcpv4-srvctl', 'init', '--interface', 'lan10')
             self.start()
             self.exchange('lan10', probe.request())
             assert len(self.replies) == 1, self.replies

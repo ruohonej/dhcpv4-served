@@ -18,7 +18,6 @@ import (
 	"dhcpv4-served/internal/activation"
 	"dhcpv4-served/internal/config"
 	"dhcpv4-served/internal/events"
-	"dhcpv4-served/internal/hostservices"
 	"dhcpv4-served/internal/lease"
 	"dhcpv4-served/internal/privilege"
 	"dhcpv4-served/internal/protocol"
@@ -108,8 +107,10 @@ func run() error {
 	}
 
 	cfg, err := config.LoadTrusted(*configPath)
-	defaultConfig := errors.Is(err, os.ErrNotExist)
-	if err != nil && !defaultConfig {
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fail("startup.rejected", "config_missing", fmt.Errorf("configuration missing; run dhcpv4-srvctl init --interface %s: %w", *iface, err))
+		}
 		reason := "config"
 		if errors.Is(err, config.ErrFileAccess) {
 			reason = "config_file"
@@ -137,16 +138,6 @@ func run() error {
 	defer func() { _ = monitor.Close() }()
 
 	link := monitor.Link()
-	if defaultConfig {
-		dns := hostservices.Discover()
-		if len(dns) == 0 {
-			audit.Logger().Warn("defaults.option_omitted", "reason", "dns_unavailable", "result", "omitted", "count", 1)
-		}
-		cfg, err = config.Default(link.IP, link.Subnet, dns)
-		if err != nil {
-			return fail("startup.rejected", "config_link", fmt.Errorf("derive default configuration: %w", err))
-		}
-	}
 	if err := cfg.ValidateLink(link.IP, link.Subnet); err != nil {
 		return fail("startup.rejected", "config_link", fmt.Errorf("validate configuration against interface: %w", err))
 	}

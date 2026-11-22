@@ -47,9 +47,8 @@ LockPersonality=yes
 MemoryDenyWriteExecute=yes
 KeyringMode=private
 RemoveIPC=yes
-# UDP and journal descriptors are inherited. UNIX sockets permit startup queries
-# to resolved Varlink; route netlink monitors link identity.
-RestrictAddressFamilies=AF_NETLINK AF_UNIX
+# UDP and journal descriptors are inherited; route netlink monitors link identity.
+RestrictAddressFamilies=AF_NETLINK
 SocketBindDeny=any
 # Use systemd-maintained groups for runtime/network compatibility and Landlock.
 # Deployment baseline: Ubuntu 26.04/systemd 259 and Linux 6.18+.

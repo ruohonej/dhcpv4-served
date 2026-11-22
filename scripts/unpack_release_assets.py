@@ -16,6 +16,8 @@ def unpack(incoming, assets):
         "checksums.txt",
         "dhcpv4-served-linux-amd64",
         "dhcpv4-served-linux-amd64.cdx.json",
+        "dhcpv4-srvctl-linux-amd64",
+        "dhcpv4-srvctl-linux-amd64.cdx.json",
         "sbom-bindings.json",
     }
     package_name = r"dhcpv4-served_[0-9A-Za-z._~+-]+"

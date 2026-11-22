@@ -56,8 +56,8 @@ def main():
     version = os.environ["GITHUB_REF_NAME"]
     source = os.environ["GITHUB_SHA"]
     entries = []
-    for arch in ("amd64",):
-        binary = assets / ("dhcpv4-served-linux-" + arch)
+    for name in ("dhcpv4-served-linux-amd64", "dhcpv4-srvctl-linux-amd64"):
+        binary = assets / name
         sbom_path = assets / (binary.name + ".cdx.json")
         sbom = json.loads(sbom_path.read_text())
         info = subprocess.check_output(["go", "version", "-m", str(binary)], text=True)
