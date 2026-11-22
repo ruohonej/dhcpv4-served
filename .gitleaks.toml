@@ -10,3 +10,12 @@ commits = ["8e9d3db02c1cdfbb1587ddb5379914064247f626"]
 paths = ["^\\.github/PROTECTION\\.md$"]
 regexTarget = "line"
 regexes = ["API failure, missing/truncated file lists"]
+
+# This cache restore prefix in the simulation branch is not a credential.
+[[allowlists]]
+description = "Historical fuzz cache restore prefix"
+condition = "AND"
+commits = ["9d79ba2b75e43d292d2c1444215fabf22a1c4267"]
+paths = ["^\\.github/workflows/fuzz\\.yml$"]
+regexTarget = "line"
+regexes = ["restore-keys: dst-fuzz-v5-go127-"]
