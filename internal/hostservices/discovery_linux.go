@@ -36,8 +36,13 @@ type dnsReply struct {
 
 // Discover queries resolved's Varlink socket before sandboxing.
 func Discover() []netip.Addr {
-	dns, _ := discoverDNS(resolveSocket)
+	dns, _ := DiscoverDNS()
 	return dns
+}
+
+// DiscoverDNS returns the resolver snapshot or an error if it cannot be queried.
+func DiscoverDNS() ([]netip.Addr, error) {
+	return discoverDNS(resolveSocket)
 }
 
 func discoverDNS(socket string) ([]netip.Addr, error) {
