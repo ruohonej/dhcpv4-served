@@ -97,7 +97,20 @@ must forward client traffic if routing is needed. The command snapshots usable
 DNS servers from systemd-resolved and omits DNS if discovery fails. Review the
 configuration before arming the socket. If the worker reports `config_missing`,
 run `dhcpv4-srvctl init --interface IFACE` and rearm the socket. For a different pool or exclusions, edit
-the YAML and validate it using `dhcpv4-served validate`.
+the YAML and validate it using `/usr/libexec/dhcpv4-served validate /etc/dhcpv4-served/IFACE.yaml`.
+
+After link or resolver changes, disarm the socket and stop the worker, then run
+`sudo dhcpv4-srvctl refresh --interface IFACE`. Refresh retains the configured pool,
+router, lease durations, exclusions, authoritative mode and other options. It updates
+DNS when discovery succeeds, including clearing the list if no servers are eligible.
+When discovery fails, it retains the existing DNS list and reports the failure.
+It rejects retained settings incompatible with the new link. Review
+the result before rearming. A changed pool or server address can make existing
+leases incompatible; follow the [recovery rules](TechnicalSpecification.md#persistence-and-recovery).
+Refresh rewrites the YAML and does not retain comments or formatting.
+Refresh commands serialize using an exclusive `flock` on `/etc/dhcpv4-served`.
+Coordinate concurrent manual configuration writes using the same directory lock,
+for example `sudo flock -x /etc/dhcpv4-served COMMAND`.
 
 ## Development and tests
 
