@@ -24,6 +24,8 @@ jobs:
             target: FuzzParse
           - package: ./internal/server
             target: FuzzHandler
+          - package: ./internal/server
+            target: FuzzLeaseSequences
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -32,6 +34,17 @@ jobs:
         with:
           go-version: '1.27.x'
           check-latest: true
+      - name: Find Go fuzz cache
+        if: github.event_name == 'schedule' && matrix.target == 'FuzzLeaseSequences'
+        id: fuzz-cache
+        run: echo "path=$(go env GOCACHE)/fuzz" >> "$GITHUB_OUTPUT"
+      - name: Restore fuzz cache
+        if: github.event_name == 'schedule' && matrix.target == 'FuzzLeaseSequences'
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ steps.fuzz-cache.outputs.path }}
+          key: dst-fuzz-v5-go127-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: dst-fuzz-v5-go127-
       - name: Run seeds and bounded fuzzing
         env:
           PACKAGE: ${{ matrix.package }}
@@ -41,6 +54,12 @@ jobs:
           duration=30s
           if [ "$EVENT" = schedule ]; then duration=5m; fi
           go test "$PACKAGE" -run '^$' -fuzz "^${TARGET}$" -fuzztime "$duration" -parallel 2
+      - name: Save fuzz cache
+        if: success() && github.event_name == 'schedule' && matrix.target == 'FuzzLeaseSequences'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ steps.fuzz-cache.outputs.path }}
+          key: dst-fuzz-v5-go127-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Retain reproductions
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
