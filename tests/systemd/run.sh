@@ -8,6 +8,15 @@ fi
 [[ $(ps -p 1 -o comm=) == systemd ]] || { echo 'Host PID 1 must be systemd.' >&2; exit 1; }
 [[ $(stat -fc %T /sys/fs/cgroup) == cgroup2fs ]] || { echo 'cgroup v2 is required.' >&2; exit 1; }
 load_env=DHCPV4_SERVED_LOAD=0
+require_apparmor=${DHCPV4_SERVED_REQUIRE_APPARMOR:-0}
+[[ $require_apparmor == 0 || $require_apparmor == 1 ]] || { echo 'Invalid AppArmor test setting.' >&2; exit 1; }
+security_mount=()
+if [[ $require_apparmor == 1 ]]; then
+    [[ $(cat /sys/module/apparmor/parameters/enabled) == Y ]] || { echo 'AppArmor must be enabled.' >&2; exit 1; }
+    grep -Fx 'dhcpv4-served (enforce)' /sys/kernel/security/apparmor/profiles
+    # Guest systemd needs securityfs to detect the host's loaded policy.
+    security_mount=(--bind-ro=/sys/kernel/security)
+fi
 runtime=12min
 if [[ ${1:-} == --load && $# == 1 ]]; then
     load_env=DHCPV4_SERVED_LOAD=1
@@ -70,7 +79,7 @@ cp --archive --reflink=auto "$guest/armed" "$guest/disabled"
 
 boot() {
     local phase=$1 root=$2 selection=$3 robot_output=$4 limit=$5 required_test=$6
-    printf '%s\n' "$load_env" \
+    printf '%s\n' "$load_env" "DHCPV4_SERVED_REQUIRE_APPARMOR=$require_apparmor" \
         "DHCPV4_SERVED_ROBOT_SELECTION=\"$selection\"" \
         "DHCPV4_SERVED_ROBOT_OUTPUT=/test-output/$robot_output" \
         > "$root/opt/dhcpv4-served-tests/robot.env"
@@ -82,6 +91,7 @@ boot() {
         --machine="$unit" --directory="$root" \
         --private-users=no --private-network \
         --capability=CAP_BPF,CAP_PERFMON \
+        "${security_mount[@]}" \
         --bind="$output:/test-output" 2>&1 | tee "$output/nspawn-$phase.log"
 
     # A clean poweroff cannot turn a missing or failed Robot result into a pass.
