@@ -4,8 +4,10 @@ set -euo pipefail
 shopt -s nullglob
 assets=${1:-release-assets}
 : "${GITHUB_REF_NAME:?version tag is required}"
+: "${PROVENANCE_SIGNER_SHA:?signer workflow commit is required}"
 case "$GITHUB_REF_NAME" in v*) ;; *) echo 'Expected a version tag' >&2; exit 1 ;; esac
-identity="https://github.com/ruohonej/dhcpv4-served/.github/workflows/release.yml@refs/tags/$GITHUB_REF_NAME"
+[[ "$PROVENANCE_SIGNER_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected a full signer workflow SHA' >&2; exit 1; }
+identity="https://github.com/ruohonej/dhcpv4-served/.github/workflows/release-build.yml@$PROVENANCE_SIGNER_SHA"
 issuer=https://token.actions.githubusercontent.com
 files=("$assets"/*)
 [ "${#files[@]}" -gt 0 ] || { echo 'No release assets to sign' >&2; exit 1; }

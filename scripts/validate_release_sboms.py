@@ -8,6 +8,12 @@ import subprocess
 import sys
 
 
+# This replacement is pinned in go.mod and documented in NOTICE.
+VARLINK_VERSION = "v2.0.0-20260611234345-b30f18e21e83"
+REVIEWED_REPLACEMENT = (("github.com/varlink/go/v2", VARLINK_VERSION),
+                        ("github.com/noxiouz/go/v2", VARLINK_VERSION))
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -22,13 +28,21 @@ def validate(binary, sbom, build_info):
     components = {(c.get("name"), c.get("version")) for c in sbom.get("components", [])}
     if ("stdlib", toolchain) not in components:
         raise ValueError("SBOM missing Go standard library version " + toolchain)
-    for line in lines[1:]:
+    for index, line in enumerate(lines[1:], start=1):
         fields = line.split()
-        if fields and fields[0] == "=>":
-            raise ValueError("module replacements need explicit SBOM review")
-        if fields and fields[0] == "dep":
-            if len(fields) < 3 or (fields[1], fields[2]) not in components:
-                raise ValueError("SBOM missing embedded module: " + line.strip())
+        if fields[:1] == ["=>"]:
+            original = lines[index - 1].split()
+            module = tuple(fields[1:3])
+            if original[:1] != ["dep"] or (tuple(original[1:3]), module) != REVIEWED_REPLACEMENT:
+                raise ValueError("module replacements need explicit SBOM review")
+        elif fields[:1] == ["dep"]:
+            if index + 1 < len(lines) and lines[index + 1].split()[:1] == ["=>"]:
+                continue
+            module = tuple(fields[1:3])
+        else:
+            continue
+        if module not in components:
+            raise ValueError("SBOM missing embedded module: " + line.strip())
     if sbom.get("bomFormat") != "CycloneDX":
         raise ValueError("not a CycloneDX SBOM")
     subject = sbom.get("metadata", {}).get("component", {})
