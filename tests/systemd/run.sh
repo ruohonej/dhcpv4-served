@@ -16,7 +16,10 @@ if [[ $require_apparmor == 1 ]]; then
     grep -Fx 'dhcpv4-served (enforce)' /sys/kernel/security/apparmor/profiles
     # Guest systemd detects AppArmor via the host's module parameter. Expose
     # securityfs for diagnostics too; both mounts remain read-only.
-    security_mount=(--bind-ro=/sys/module --bind-ro=/sys/kernel/security)
+    # Permit the modern LSM self-attribute API through nspawn's outer filter;
+    # the worker still receives the production service's own syscall filter.
+    security_mount=(--bind-ro=/sys/module --bind-ro=/sys/kernel/security
+        --system-call-filter=lsm_get_self_attr,lsm_set_self_attr,lsm_list_modules)
 fi
 runtime=12min
 if [[ ${1:-} == --load && $# == 1 ]]; then
