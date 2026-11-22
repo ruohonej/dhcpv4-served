@@ -146,7 +146,8 @@ class SystemdBackend(FastBackend):
                 raise RuntimeError('Production strict-profile acceptance requires enabled Landlock ABI 7+')
             if os.environ.get('DHCPV4_SERVED_REQUIRE_APPARMOR') == '1':
                 result = run('systemd-analyze', 'condition', 'ConditionSecurity=apparmor', check=False)
-                print(f'Guest AppArmor detection: {result.stdout} {result.stderr}', flush=True)
+                if result.returncode:
+                    raise RuntimeError(f'Guest systemd cannot detect AppArmor: {result.stdout} {result.stderr}')
             run('systemd-analyze', 'verify', '--man=no', 'dhcpv4-served@lan10.socket', 'dhcpv4-served@lan10.service')
             SystemdBackend.prepared = True
 

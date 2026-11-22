@@ -14,8 +14,9 @@ security_mount=()
 if [[ $require_apparmor == 1 ]]; then
     [[ $(cat /sys/module/apparmor/parameters/enabled) == Y ]] || { echo 'AppArmor must be enabled.' >&2; exit 1; }
     grep -Fx 'dhcpv4-served (enforce)' /sys/kernel/security/apparmor/profiles
-    # Guest systemd needs securityfs to detect the host's loaded policy.
-    security_mount=(--bind-ro=/sys/kernel/security)
+    # Guest systemd detects AppArmor via the host's module parameter. Expose
+    # securityfs for diagnostics too; both mounts remain read-only.
+    security_mount=(--bind-ro=/sys/module --bind-ro=/sys/kernel/security)
 fi
 runtime=12min
 if [[ ${1:-} == --load && $# == 1 ]]; then
