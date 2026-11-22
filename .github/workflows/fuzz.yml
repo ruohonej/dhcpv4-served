@@ -44,7 +44,8 @@ jobs:
         with:
           path: ${{ steps.fuzz-cache.outputs.path }}
           key: dst-fuzz-v5-go127-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: dst-fuzz-v5-go127-
+          restore-keys: |
+            dst-fuzz-v5-go127-
       - name: Run seeds and bounded fuzzing
         env:
           PACKAGE: ${{ matrix.package }}

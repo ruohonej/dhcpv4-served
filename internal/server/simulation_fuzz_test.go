@@ -366,9 +366,10 @@ func runLeaseSequence(t *testing.T, input []byte, observe func(string)) {
 			emit("silence")
 		}
 		if reply != nil {
-			if want == dhcpv4.MessageTypeOffer {
+			switch want {
+			case dhcpv4.MessageTypeOffer:
 				emit("offer")
-			} else if want == dhcpv4.MessageTypeAck {
+			case dhcpv4.MessageTypeAck:
 				emit("ack")
 			}
 			p, e := dhcpv4.FromBytes(reply.Packet)
