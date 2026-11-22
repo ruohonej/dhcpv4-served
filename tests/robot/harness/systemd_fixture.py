@@ -257,6 +257,10 @@ class SystemdBackend(FastBackend):
                            if line.startswith('Uid:')))
             uids.append(uid)
             assert prop(process.unit, 'DynamicUser') == 'yes'
+            apparmor = Path('/sys/module/apparmor/parameters/enabled')
+            if apparmor.is_file() and apparmor.read_text().strip() == 'Y':
+                label = Path(f'/proc/{process.pid}/attr/current').read_text().strip()
+                assert label == 'dhcpv4-served (enforce)', label
             assert prop(process.unit, 'ProtectProc') == 'invisible'
             assert prop(process.unit, 'ProcSubset') == 'pid'
             state = Path(f'/proc/{process.pid}/root/var/lib/dhcpv4-served-{link}')

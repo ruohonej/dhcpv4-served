@@ -8,15 +8,18 @@ An experimental, socket-activated DHCPv4 server for an isolated Linux lab. Each 
 
 ## Run one instance
 
-This walkthrough uses a disposable Ubuntu 26.04 amd64 host, systemd 259+, and Linux 6.18+ with Landlock ABI 7 enabled. The shipped service requires successful all-thread Landlock enforcement. Use an isolated interface named `lan10`, already up with exactly one IPv4 address, `192.168.10.1/24`. Reserve the pool `192.168.10.100–200` for this server. The example advertises the host as both router and DNS server. Adjust or remove those settings if the lab host does not provide those services. [Example YAML](examples/lan10.yaml)
+This walkthrough uses a disposable Ubuntu 26.04 amd64 host, systemd 259+, and Linux 6.18+ with Landlock ABI 7 and AppArmor enabled, and the `apparmor` package installed. The shipped service requires successful all-thread Landlock enforcement. Use an isolated interface named `lan10`, already up with exactly one IPv4 address, `192.168.10.1/24`. Reserve the pool `192.168.10.100–200` for this server. The example advertises the host as both router and DNS server. Adjust or remove those settings if the lab host does not provide those services. [Example YAML](examples/lan10.yaml)
 
-From the repository root, build and install a local snapshot using Go and GoReleaser v2.13.3. CI uses Go 1.27.x. The package installs the binary and two unit templates. The operator supplies the interface configuration and chooses when to arm the socket.
+From the repository root, build and install a local snapshot using Go and GoReleaser v2.13.3. CI uses Go 1.27.x. The package installs the binary, two unit templates, and an AppArmor profile. The operator supplies the interface configuration and chooses when to arm the socket.
 
 ```sh
 goreleaser release --snapshot --clean
 sudo dpkg -i dist/*_linux_amd64.deb
+sudo apparmor_parser -r /etc/apparmor.d/dhcpv4-served
 /usr/libexec/dhcpv4-served --version
 ```
+
+Load the profile after every package installation or upgrade, before starting workers; AppArmor loads profiles from `/etc/apparmor.d` on boot. On hosts with AppArmor enabled, a missing profile prevents service startup. systemd ignores `AppArmorProfile=` when AppArmor is disabled, so check that AppArmor is enabled and verify a running worker’s confinement via `/proc/PID/attr/current`. Reloading the profile updates running workers.
 
 Validate and install the configuration on the fresh host. The worker must be able to read the YAML. It checks that the file and ancestor directories are root-owned, have no group or other write permission, and contain no symlinks. For subsequent changes, disarm the instance first and replace the file by atomic rename in its protected directory.
 
@@ -121,7 +124,7 @@ Use `tests/acceptance run PROFILE` or `tests/check acceptance run PROFILE` for l
 
 Read a behavior in [the Robot suites](tests/robot/suites). Shared Robot settings live in `resources/`, Python keyword libraries in `keywords/`, drivers and assertions in `harness/`, harness unit tests in `regression/`, and replay inputs in `data/`. A test template expresses one rule with named examples for each port, client, or startup condition. The Given/When/Then keywords call Python drivers such as [the namespace driver](tests/robot/harness/namespace_driver.py). Both DHCP servers use [the same reply assertions](tests/robot/harness/reply_checks.py). [Package scenarios](tests/robot/suites/package_lifecycle.robot) use a snapshot from before the update to check journal activity, configuration, and lease state afterward.
 
-For `package` and `load`, use a disposable Ubuntu 26.04 amd64 systemd host with root, cgroup v2/BPF, namespaces, and strict Landlock support. Install systemd-nspawn and mkosi v25.3 as in [CI](.github/workflows/ci.yml). Build the snapshot DEB, then run the following with the virtual environment on `PATH`. With one DEB the update cases exercise a reinstall. CI currently uses one DEB and exercises a reinstall. Once an earlier release is available, supply its DEB as a second argument to test an upgrade from a lower version. The test records both package versions in `update-versions.json`.
+For `package` and `load`, use a disposable Ubuntu 26.04 amd64 systemd host with root, cgroup v2/BPF, namespaces, and strict Landlock support. If host AppArmor is enabled, load the candidate profile on the host before running the nspawn tests; the guest shares the host kernel policy. Install systemd-nspawn and mkosi v25.3 as in [CI](.github/workflows/ci.yml). Build the snapshot DEB, then run the following with the virtual environment on `PATH`. With one DEB the update cases exercise a reinstall. CI currently uses one DEB and exercises a reinstall. Once an earlier release is available, supply its DEB as a second argument to test an upgrade from a lower version. The test records both package versions in `update-versions.json`.
 
 ```sh
 tests/systemd/build.sh dist/*_linux_amd64.deb

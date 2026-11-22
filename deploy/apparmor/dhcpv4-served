@@ -1,0 +1,34 @@
+# Named profile: systemd applies it to workers, not to the validation CLI.
+#include <tunables/global>
+
+profile dhcpv4-served {
+  # The service manager enters this profile before executing the worker.
+  /usr/libexec/dhcpv4-served mrix,
+
+  # LoadTrusted opens each configuration directory separately.
+  / r,
+  /etc/ r,
+  /etc/dhcpv4-served/ r,
+  /etc/dhcpv4-served/*.yaml r,
+
+  # DynamicUser's StateDirectory is mounted at the private path. DAC and
+  # systemd isolate instances; the profile is shared by all instances.
+  /var/ r,
+  /var/lib/ r,
+  /var/lib/private/ r,
+  owner /var/lib/private/dhcpv4-served-*/ r,
+  owner /var/lib/private/dhcpv4-served-*/** rwk,
+
+  # Link discovery/monitoring, the activated UDP descriptor, and resolved's
+  # Varlink connection. systemd prevents creation of new IP sockets.
+  network netlink,
+  network inet dgram,
+  network unix,
+  /run/ r,
+  /run/systemd/ r,
+  /run/systemd/resolve/ r,
+  /run/systemd/resolve/io.systemd.Resolve rw,
+
+  # Permit service stop/restart signals and Go runtime thread signaling.
+  signal,
+}

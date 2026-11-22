@@ -9,6 +9,7 @@ import tarfile
 
 
 PAYLOAD = {
+    'etc/apparmor.d/dhcpv4-served': 0o644,
     'usr/libexec/dhcpv4-served': 0o755,
     'usr/lib/systemd/system/dhcpv4-served@.service': 0o644,
     'usr/lib/systemd/system/dhcpv4-served@.socket': 0o644,
