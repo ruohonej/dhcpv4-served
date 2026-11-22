@@ -126,6 +126,8 @@ Read a behavior in [the Robot suites](tests/robot/suites). Shared Robot settings
 
 For `package` and `load`, use a disposable Ubuntu 26.04 amd64 systemd host with root, cgroup v2/BPF, namespaces, and strict Landlock support. If host AppArmor is enabled, load the candidate profile on the host before running the nspawn tests; the guest shares the host kernel policy. Install systemd-nspawn and mkosi v25.3 as in [CI](.github/workflows/ci.yml). Build the snapshot DEB, then run the following with the virtual environment on `PATH`. With one DEB the update cases exercise a reinstall. CI currently uses one DEB and exercises a reinstall. Once an earlier release is available, supply its DEB as a second argument to test an upgrade from a lower version. The test records both package versions in `update-versions.json`.
 
+AppArmor enforcement is not verified by the default CI run. To require it on a compatible disposable host, load the candidate profile and run `sudo env DHCPV4_SERVED_REQUIRE_APPARMOR=1 tests/systemd/run.sh` after building the image. Setting the GitHub Actions repository variable `DHCPV4_SERVED_TEST_APPARMOR` to `1` enables the same check in CI. The current hosted-runner nspawn setup fails the AppArmor profile transition, so this opt-in remains experimental.
+
 ```sh
 tests/systemd/build.sh dist/*_linux_amd64.deb
 tests/acceptance run package
